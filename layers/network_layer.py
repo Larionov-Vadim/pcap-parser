@@ -3,6 +3,8 @@
 __author__ = 'vadim'
 
 class IPProtocol:
+    TCP = 6
+    UDP = 17
 
     def __init__(self):
         self.version = None

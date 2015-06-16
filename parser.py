@@ -5,11 +5,14 @@ from struct import unpack
 from layers.data_link_layer import EthernetII
 from layers.network_layer import IPProtocol
 from layers.transport_layer import TCPProtocol
+from layers.application_layer import POP3
+from result_set import ResultSet
 
 __author__ = 'vadim'
 
 class PcapParser:
     def __init__(self):
+        self.__pop3_buf = list()        # Буфер для сборки сообщений протокола POP3
         pass
 
     def parse(self, frame):
@@ -24,14 +27,31 @@ class PcapParser:
         :return:
         """
         ethernet_frame = self.parse_frame(frame)
-        if ethernet_frame.ether_type == 8:              # IP-пакет
+        if ethernet_frame.ether_type == EthernetII.ETHER_TYPE_IPv4:       # IP-пакет
             ip_packet = self.parse_ip_packet(ethernet_frame.data)
             ethernet_frame.data = ip_packet
-            if ip_packet.protocol == 6:
+
+            if ip_packet.protocol == IPProtocol.TCP:
                 tcp_segment = self.parse_tcp_segment(ip_packet.data)
                 ip_packet.data = tcp_segment
+
+                data = None
+                file_extension = None
+
                 if len(tcp_segment.data) != 0:
-                    print(tcp_segment.data)
+                    if tcp_segment.src_port == POP3.PORT:
+                        data = self.parse_pop3(tcp_segment.data)
+                        file_extension = '.eml'
+
+                    # TODO SMTP-protocol
+                    # TODO HTTP-protocol
+                    # TODO FTP-protocol
+
+                if data is not None:
+                    result_set = ResultSet(ip_packet.src_ip, ip_packet.dst_ip, data, file_extension)
+                    return result_set
+                else:
+                    return None
 
     def parse_frame(self, frame):
         """
@@ -43,9 +63,8 @@ class PcapParser:
         ethernet_length = 14                        # длина заголовка кадра в протоколе Ethernet II
         ethernet_header = frame[:ethernet_length]   # Ethernet заголовок
         eth = unpack('!6s6sH', ethernet_header)     # формирует кортеж согласно параметрам разбора
-        ether_type = socket.ntohs(eth[2])           # преобразование из big endian в тип протокола
 
-        ethernet_frame = EthernetII(dst_mac=eth[0], src_mac=eth[1], ether_type=ether_type)
+        ethernet_frame = EthernetII(dst_mac=eth[0], src_mac=eth[1], ether_type=eth[2])
         ethernet_frame.data = frame[ethernet_length:]
         return ethernet_frame
 
@@ -67,11 +86,11 @@ class PcapParser:
         # TODO лучше ничего не придумал
         ip_packet.id = iph[3]
         flags_byte = iph[4] >> 8
-        ip_packet.flags = (
-            bool(flags_byte & 0b10000000),
-            bool(flags_byte & 0b01000000),
-            bool(flags_byte & 0b00100000),
-        )
+        ip_packet.flags = {
+            'reserved_bit': bool(flags_byte & 0b10000000),      # Reverved, always is 0
+            'DF': bool(flags_byte & 0b01000000),                # Don't fragment
+            'MF': bool(flags_byte & 0b00100000),                # More fragments
+        }
         ip_packet.offset = (iph[4] & ((0b00011111 << 8) | 0xFF))
 
         ip_packet.ttl = iph[5]
@@ -109,5 +128,30 @@ class PcapParser:
         return tcp_segment
 
     def parse_pop3(self, message):
-        # TODO
-        pass
+        # Нефрагментированные сообщения:
+        #   1) однострочные, оканчиваются на '\r\n';
+        #   2) многострочные, оканчиваются на '\r\n.\r\n';
+        # Фрагментированные сообщения:
+        #   1) многострочные, оканчиваются на '\r\n.\r\n';
+
+        # Продолжение письма
+        msg = None
+        if len(self.__pop3_buf) > 0:
+            if message.endswith('.\r\n'):
+                msg = str()
+                for part_msg in self.__pop3_buf:
+                    msg += part_msg
+                msg += message
+                # TODO удалить
+                msg += '---------------------------------------------'
+                del self.__pop3_buf[:]      # Очистка буфера
+            else:
+                self.__pop3_buf.append(message)
+
+        # Начало письма
+        elif 'From: ' in message:
+            if message.startswith('+OK'):
+                message = message.split('\n', 1)[1]
+            self.__pop3_buf.append(message)
+
+        return msg

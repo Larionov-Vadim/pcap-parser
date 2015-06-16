@@ -7,7 +7,7 @@ from parser import PcapParser
 __author__ = 'vadim'
 
 def main(argv):
-    path_file = '/home/vadim/pop3.pcap'
+    path_file = '/home/vadim/pop3_1.pcap'
     if not os.path.isfile(path_file):
         print('{0}: No such file'.format(path_file))
         return
@@ -22,11 +22,10 @@ def main(argv):
     """
     (header_cap, frame) = cap.next()
     while len(frame) != 0:
-        """
-        На данный момент вся логика в pcapParser. В последующем нужно вынести её в
-        класс StackProtocols, у которого можно будет вызывать необходимые методы
-        """
-        pcapParser.parse(frame)
+        result_set = pcapParser.parse(frame)
+
+        if result_set is not None:
+            print result_set.data
         (header_cap, frame) = cap.next()
 
 if __name__ == "__main__":

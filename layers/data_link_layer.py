@@ -5,6 +5,8 @@ __author__ = 'vadim'
 
 
 class EthernetII:
+    ETHER_TYPE_IPv4 = 0x0800
+
     def __init__(self, dst_mac=None, src_mac=None, ether_type=None, data=None):
         """
         Кадр канального уровня протокола Ethernet II
