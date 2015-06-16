@@ -12,6 +12,10 @@ __author__ = 'vadim'
 
 class PcapParser:
     def __init__(self):
+        """
+        Парсер пакетов сетевого трафика
+        :return:
+        """
         self.__pop3_buf = list()        # Буфер для сборки сообщений протокола POP3
         pass
 
@@ -22,21 +26,22 @@ class PcapParser:
             * Канальный уровень: Ethernet II
             * Сетевой уровень: IPv4
             * Транспортный уровень: TCP
-            * Прикладной уровень:
+            * Прикладной уровень: POP3
         :param frame: кадр канального уровня в виде байт
-        :return:
+        :return: экземпляр класса ResultSet либо None, если обработка данных не завершена
         """
         ethernet_frame = self.parse_frame(frame)
-        if ethernet_frame.ether_type == EthernetII.ETHER_TYPE_IPv4:       # IP-пакет
+        if ethernet_frame.ether_type == EthernetII.ETHER_TYPE_IPv4:         # IP-пакет
             ip_packet = self.parse_ip_packet(ethernet_frame.data)
             ethernet_frame.data = ip_packet
 
-            if ip_packet.protocol == IPProtocol.TCP:
+            if ip_packet.protocol == IPProtocol.TCP:                        # TCP-сегмент
                 tcp_segment = self.parse_tcp_segment(ip_packet.data)
                 ip_packet.data = tcp_segment
 
-                data = None
-                file_extension = None
+                # Предварительная инициализация
+                data = None                                 # Данные от прикладного уровня
+                file_extension = None                       # Расширение файла с данными от прикладного уровня
 
                 if len(tcp_segment.data) != 0:
                     if tcp_segment.src_port == POP3.PORT:
@@ -47,7 +52,7 @@ class PcapParser:
                     # TODO HTTP-protocol
                     # TODO FTP-protocol
 
-                if data is not None:
+                if (data is not None) and (file_extension is not None):
                     result_set = ResultSet(ip_packet.src_ip, ip_packet.dst_ip, data, file_extension)
                     return result_set
                 else:

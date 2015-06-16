@@ -3,10 +3,12 @@ import pcapy
 import sys
 import os.path
 from parser import PcapParser
+from utils import create_dir, create_path_name
 
 __author__ = 'vadim'
 
 def main(argv):
+    base_dir = os.path.dirname(os.path.realpath(__file__))
     path_file = '/home/vadim/pop3_1.pcap'
     if not os.path.isfile(path_file):
         print('{0}: No such file'.format(path_file))
@@ -25,8 +27,15 @@ def main(argv):
         result_set = pcapParser.parse(frame)
 
         if result_set is not None:
-            print result_set.data
+            dir_path = create_path_name(base_dir, result_set.src_ip, result_set.dst_ip)
+            create_dir(dir_path)
+
+            file_name = result_set.generate_file_name()
+            with open(create_path_name(dir_path, file_name), mode='w') as f:
+                f.write(result_set.data)
+
         (header_cap, frame) = cap.next()
+
 
 if __name__ == "__main__":
     main(sys.argv)
