@@ -3,6 +3,7 @@
 __author__ = 'vadim'
 
 class TCPProtocol:
+    HEADER_LENGTH = 20                          # Размер заголовка в байтах
 
     def __init__(self):
         self.src_port = None                    # Номер порта отправителя

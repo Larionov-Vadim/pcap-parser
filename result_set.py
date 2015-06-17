@@ -11,7 +11,15 @@ class ResultSet:
         self.file_extension = file_extension
 
     def generate_file_name(self, index=None):
-        hash = md5(self.data)
+        """
+        Генерация уникального имени файла. Для генерации используется md5 hash.
+        Хэш-сумма вычисляется по первым 2048 байтам данных data
+        :param index: добавляет индекс в файлу после генерации
+        :return: {md5-hash}_{index}.{file_extension}
+        """
+        # Ограничение для получения md5-хэша требуется для больших файлов
+        # Значение в 2048 байт выбрано произвольно
+        hash = md5(self.data[:2048])
         file_name = hash.hexdigest()
         if index is not None:
             file_name += '_%i' % index

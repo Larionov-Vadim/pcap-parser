@@ -8,7 +8,8 @@ from utils import create_dir, create_path_name
 __author__ = 'vadim'
 
 def main(argv):
-    base_dir = os.path.dirname(os.path.realpath(__file__))
+    # base_dir = os.path.dirname(os.path.realpath(__file__))
+    base_dir = '/home/vadim/'
     path_file = '/home/vadim/pop3_1.pcap'
     if not os.path.isfile(path_file):
         print('{0}: No such file'.format(path_file))
@@ -39,3 +40,4 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv)
+    print('Success')

@@ -5,6 +5,7 @@ __author__ = 'vadim'
 
 
 class EthernetII:
+    HEADER_LENGTH = 14              # Размер заголовка в байтах
     ETHER_TYPE_IPv4 = 0x0800
 
     def __init__(self, dst_mac=None, src_mac=None, ether_type=None, data=None):
