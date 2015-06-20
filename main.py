@@ -10,7 +10,7 @@ __author__ = 'vadim'
 def main(argv):
     # base_dir = os.path.dirname(os.path.realpath(__file__))
     base_dir = '/home/vadim/'
-    path_file = '/home/vadim/pop3_1.pcap'
+    path_file = '/home/vadim/dns.cap'
     if not os.path.isfile(path_file):
         print('{0}: No such file'.format(path_file))
         return
@@ -26,6 +26,7 @@ def main(argv):
     (header_cap, frame) = cap.next()
     while len(frame) != 0:
         result_set = pcapParser.parse(frame)
+
         if result_set is not None:
             dir_path = create_path_name(base_dir, result_set.src_ip, result_set.dst_ip)
             create_dir(dir_path)
