@@ -7,7 +7,7 @@ __author__ = 'vadim'
 
 class DNS:
     PORT = 53
-    HEADER_LENGTH = 12  # Размер заголовка в байтах
+    HEADER_LENGTH = 12          # Размер заголовка в байтах
 
     def __init__(self):
         self.header = None
@@ -25,7 +25,8 @@ class DNS:
                ' Additional_record_count: ' + str(self.header.additional_record_count)
 
     def get_data(self):
-        data = 'Id: {0} ({1})\n'.format(self.header.id, hex(self.header.id))
+        data = '---Header--\n'
+        data += 'Id: {0} ({1})\n'.format(self.header.id, hex(self.header.id))
         data += 'Question Count: {}\n'.format(self.header.question_count)
         data += 'Answer Record Count: {}\n'.format(self.header.answer_record_count)
         data += 'Authority Record Count: {}\n'.format(self.header.authority_record_count)
@@ -34,11 +35,13 @@ class DNS:
         for query in self.queries:
             data += '---Question---\n'
             data += 'Name: {}\n'.format(query.name)
-            data += 'Type: {}\n'.format(query.type)
-            data += 'Class: {}\n'.format(query.clazz)
+            data += 'Type: {}\n'.format(DNS._Type.get_name(query.type))
+            data += 'Class: {}\n'.format(DNS._Clazz.get_name(query.clazz))
         data += '\n'
 
-        f = [('Answers', self.answers), ('Authorities', self.authorities,)]
+        f = [('Answers', self.answers),
+             ('Authorities', self.authorities,),
+             ('Additions', self.additions)]
 
         for title, list_records in f:
             if list_records:
@@ -52,9 +55,9 @@ class DNS:
                 data += '-{0}[{1}]-\n'.format(title, count)
                 count += 1
                 data += 'Name: {}\n'.format(record.name)
-                data += 'Type: {}\n'.format(record.type)
-                data += 'Class: {}\n'.format(record.clazz)
-                data += 'TTL: {}\n'.format(record.TTL)
+                data += 'Type: {}\n'.format(DNS._Type.get_name(record.type))
+                data += 'Class: {}\n'.format(DNS._Clazz.get_name(record.clazz))
+                data += 'TTL: {} seconds\n'.format(record.TTL)
                 data += 'Data length: {}\n'.format(record.data_length)
                 data += 'Data: ({})\n'.format(record.resource_data)
                 data += '\n'
@@ -65,15 +68,14 @@ class DNS:
 
     @staticmethod
     def parse(message):
-        dns_message = DNS()
-
         # Секция заголовка
         header, position = DNS.Header.parse(message[:DNS.HEADER_LENGTH])
-        dns_message.header = header
 
         # Смотрим только флаг QR - тип запроса
         # Если это отклик (1), то парсим, иначе пропускаем (skip)
         if ((header.flags_and_codes & (0x1 << 15)) >> 15) == 0b1:
+            dns_message = DNS()
+            dns_message.header = header
 
             # Секция запросов
             for i in range(header.question_count):
@@ -87,15 +89,13 @@ class DNS:
 
             # Секция прав доступа
             for i in range(header.authority_record_count):
-                print("HELLO2!!!", header.authority_record_count)
                 authority, position = DNS.ResourceRecord.parse(message, position)
                 dns_message.authorities.append(authority)
 
-            # # Секция дополнительной информации
-            # for i in range(header.additional_record_count):
-            #     print("HELLO3!!!", header.additional_record_count)
-            #     addition, position = DNS.ResourceRecord.parse(message, position)
-            #     dns_message.additions.append(addition)
+            # Секция дополнительной информации
+            for i in range(header.additional_record_count):
+                addition, position = DNS.ResourceRecord.parse(message, position)
+                dns_message.additions.append(addition)
 
             return dns_message
         return None
@@ -122,7 +122,6 @@ class DNS:
         if (counter & (0x03 << 14)) >> 14 == 0b11:  # 2 старших бита равны '0b11'
             return counter & ~(0x03 << 14)
         else:
-            print('COUNTEER!: ' + str(hex(counter)))
             return -1
 
     @staticmethod
@@ -131,30 +130,34 @@ class DNS:
         info = str()
 
         if data_length is None:
-            data_length = 1000
+            data_length = 1000          # Выход из цикла будет произведён через break
 
         while pos != position + data_length:
             # Если это указатель
             if ((ord(message[pos]) & 0b11000000) >> 6) == 0b11:
+                # TODO имена
                 counter = unpack('!H', message[pos: pos + 2])[0]
                 pos += 2
-                offset = DNS._get_offset(counter)
-                name, ignore = DNS._parse_name(message[offset:])
-                info += name
+                offset = counter & ~(0x03 << 14)
+
+                # Считываем часть
+                count = ord(message[offset])
+                info += message[offset + 1: offset + 1 + count]
+                info += '.'
 
             # Иначе символьная запись
             else:
                 counter = ord(message[pos])
-                pos += 1
                 if counter == 0:
                     break
+                pos += 1
                 info += message[pos: pos + counter]
                 pos += counter
                 info += '.'
 
         if info.endswith('.'):
             info = info[:-1]
-        return info
+        return info, pos
 
     class Header:
 
@@ -215,7 +218,7 @@ class DNS:
             self.clazz = None
             self.TTL = None
             self.data_length = None
-            self.resource_data = None  # Сделаю строкой
+            self.resource_data = None           # В виде строки
 
         def __str__(self):
             return 'Name: ' + str(self.name) + \
@@ -229,12 +232,7 @@ class DNS:
         def parse(message, position):
             resource_record = DNS.ResourceRecord()
 
-            # Имя ресурсной записи - указатель в секцию запросов
-            name_offset = DNS._get_offset(unpack('!H', message[position: position + 2])[0])
-            position += 2
-            # TODO experiment
-            # resource_record.name = DNS._parse_info(message, position)
-            resource_record.name = DNS._parse_name(message[name_offset:])[0]
+            resource_record.name, position = DNS._parse_info(message, position)
 
             resource_record.type, resource_record.clazz, resource_record.TTL, \
                 resource_record.data_length = unpack('!HHIH', message[position: position + 10])
@@ -285,13 +283,13 @@ class DNS:
         def __parse_type_mx(message, position, data_length):
             info = 'Preference: ' + str(unpack('!H', message[position: position + 2])[0])
             info += '; Mail Exchange: '
-            info += DNS._parse_info(message, position + 2, data_length - 2)
+            info += DNS._parse_info(message, position + 2, data_length - 2)[0]
             return info
 
         @staticmethod
         def __parse_type_ns(message, position, data_length):
             info = 'Name Server: '
-            info += DNS._parse_info(message, position, data_length)
+            info += DNS._parse_info(message, position, data_length)[0]
             return info
 
         @staticmethod
@@ -302,13 +300,13 @@ class DNS:
         @staticmethod
         def __parse_type_cname(message, position, data_length):
             info = 'Primary Name: '
-            info += DNS._parse_info(message, position, data_length)
+            info += DNS._parse_info(message, position, data_length)[0]
             return info
 
         @staticmethod
         def __parse_type_ptr(message, position, data_length):
             info = 'Domain Name: '
-            info += DNS._parse_info(message, position, data_length)
+            info += DNS._parse_info(message, position, data_length)[0]
             return info
 
         @staticmethod
@@ -319,18 +317,66 @@ class DNS:
         """
         Класс констант для типов запроса/ресурсных записей
         """
-        A = 0x01        # 1) IPv4-адрес
-        NS = 0x02       # 2) Сервер DNS
-        CNAME = 0x05    # 5) Каноническое имя
-        PTR = 0x0C      # 12) Запись указателя
-        HINFO = 0x0d    # 13) Информация о хосте
-        MX = 0x0f       # 15) Запись об обмене почтой
-        TXT = 0x10      # 16) Запись произвольных двоичных данных
-        AAAA = 0x1C     # 28) IPv6-адрес
-        AXFR = 0xfc     # 252) Запрос на передачу зоны
-        ANY = 0xff      # 255) Запрос всех записей
+
+        __type_names = {
+            0x01: 'A',              # 1) IPv4-адрес
+            0x02: 'NS',             # 2) Сервер DNS
+            0x05: 'CNAME',          # 5) Каноническое имя
+            0x0c: 'PTR',            # 12) Запись указателя
+            0x0d: 'HINFO',          # 13) Информация о хосте
+            0x0f: 'MX',             # 15) Запись об обмене почтой
+            0x10: 'TXT',            # 16) Запись произвольных двоичных данных
+            0x1c: 'AAAA',           # 28) IPv6-адрес
+            0xfc: 'AXFR',           # 252) Запрос на передачу зоны
+            0xff: 'ANY',            # 255) Запрос всех записей
+        }
+
+        A = 0x01
+        NS = 0x02
+        CNAME = 0x05
+        PTR = 0x0C
+        HINFO = 0x0d
+        MX = 0x0f
+        TXT = 0x10
+        AAAA = 0x1C
+        AXFR = 0xfc
+        ANY = 0xff
 
         UNKNOWN = -1  # Неизвестный тип
 
         def __init__(self):
             raise Exception("This is a private constructor")
+
+        @staticmethod
+        def get_name(value):
+            name = DNS._Type.__type_names.get(value)
+            if name is None:
+                value_str = format(value, 'x').zfill(4)
+                name = 'Unknown type (0x{})'.format(value_str)
+            return name
+
+    class _Clazz:
+        """
+        Класс констант для классов запроса/ресурсных записей
+        """
+
+        __class_names = {
+            0x0000: 'Reserved',
+            0x0001: 'Internet (IN)',
+            0x0002: 'Unassigned',
+            0x0003: 'Chaos (CH)',
+            0x0004: 'Hesiod (HS)',
+            0x00FE: 'QCLASS NONE',
+            0x00FF: 'QCLASS * (ANY)',
+        }
+
+        def __init__(self):
+            raise Exception("This is a private constructor")
+
+        @staticmethod
+        def get_name(value):
+            name = DNS._Clazz.__class_names.get(value)
+            if name is None:
+                value_str = format(value, 'x').zfill(4)
+                name = 'Unknown class (0x{})'.format(value_str)
+            return name
