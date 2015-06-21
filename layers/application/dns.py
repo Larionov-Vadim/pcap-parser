@@ -7,47 +7,57 @@ __author__ = 'vadim'
 
 class DNS:
     PORT = 53
-    HEADER_LENGTH = 12              # Размер заголовка в байтах
+    HEADER_LENGTH = 12  # Размер заголовка в байтах
 
     def __init__(self):
         self.header = None
         self.queries = list()
         self.answers = list()
+        self.authorities = list()
+        self.additions = list()
 
     def __str__(self):
-        return 'Id: ' + str(self.header.id) +\
-                ' Flags: ' + str(self.header.flags_and_codes) +\
-                ' Question_count: ' + str(self.header.question_count) +\
-                ' Answer_record_count: ' + str(self.header.answer_record_count) +\
-                ' Authority_record_count: ' + str(self.header.authority_record_count) +\
-                ' Additional_record_count: ' + str(self.header.additional_record_count)
+        return 'Id: ' + str(self.header.id) + \
+               ' Flags: ' + str(self.header.flags_and_codes) + \
+               ' Question_count: ' + str(self.header.question_count) + \
+               ' Answer_record_count: ' + str(self.header.answer_record_count) + \
+               ' Authority_record_count: ' + str(self.header.authority_record_count) + \
+               ' Additional_record_count: ' + str(self.header.additional_record_count)
 
     def get_data(self):
-        data = 'Id: ' + str(self.header.id)
-        # TODO
-        data += '\n---Questions---'
-        count = 1
+        data = 'Id: {0} ({1})\n'.format(self.header.id, hex(self.header.id))
+        data += 'Question Count: {}\n'.format(self.header.question_count)
+        data += 'Answer Record Count: {}\n'.format(self.header.answer_record_count)
+        data += 'Authority Record Count: {}\n'.format(self.header.authority_record_count)
+        data += 'Additional Record Count: {}\n\n'.format(self.header.additional_record_count)
+
         for query in self.queries:
-            data += '\nQuestion ' + str(count)
-            count += 1
-            data += '\nName: ' + str(query.name)
-            data += '\nType: ' + str(query.type)
-            data += '\nClass: ' + str(query.clazz)
-            data += '\n'
+            data += '---Question---\n'
+            data += 'Name: {}\n'.format(query.name)
+            data += 'Type: {}\n'.format(query.type)
+            data += 'Class: {}\n'.format(query.clazz)
+        data += '\n'
 
-        data += '\n---Answers---'
-        count = 1
-        for answer in self.answers:
-            data += '\nAnswer ' + str(count)
-            count += 1
-            data += '\nName: ' + str(answer.name)
-            data += '\nType: ' + str(answer.type)
-            data += '\nClass: ' + str(answer.clazz)
-            data += '\nTTL: ' + str(answer.TTL)
-            data += '\nData length: ' + str(answer.data_length)
-            data += '\nData: (' + str(answer.resource_data)
-            data += ')\n'
+        f = [('Answers', self.answers), ('Authorities', self.authorities,)]
 
+        for title, list_records in f:
+            if list_records:
+                data += '---{}---\n'.format(title)
+
+            if title == 'Answers' and not list_records:
+                data += '---{}---\nEmpty Answer\n'.format(title)
+
+            count = 0
+            for record in list_records:
+                data += '-{0}[{1}]-\n'.format(title, count)
+                count += 1
+                data += 'Name: {}\n'.format(record.name)
+                data += 'Type: {}\n'.format(record.type)
+                data += 'Class: {}\n'.format(record.clazz)
+                data += 'TTL: {}\n'.format(record.TTL)
+                data += 'Data length: {}\n'.format(record.data_length)
+                data += 'Data: ({})\n'.format(record.resource_data)
+                data += '\n'
         return data
 
     def get_file_extension(self):
@@ -72,18 +82,30 @@ class DNS:
 
             # Секция откликов
             for i in range(header.answer_record_count):
-                answer, position = DNS.Answer.parse(message, position)
+                answer, position = DNS.ResourceRecord.parse(message, position)
                 dns_message.answers.append(answer)
+
+            # Секция прав доступа
+            for i in range(header.authority_record_count):
+                print("HELLO2!!!", header.authority_record_count)
+                authority, position = DNS.ResourceRecord.parse(message, position)
+                dns_message.authorities.append(authority)
+
+            # # Секция дополнительной информации
+            # for i in range(header.additional_record_count):
+            #     print("HELLO3!!!", header.additional_record_count)
+            #     addition, position = DNS.ResourceRecord.parse(message, position)
+            #     dns_message.additions.append(addition)
 
             return dns_message
         return None
 
     # Формируем url (name) DNS-запроса
     @staticmethod
-    def parse_url(query):
+    def _parse_name(query):
         url = str()
-        position = 1                            # Позиция начала символов
-        count = int(ord(query[position - 1]))   # Количество символов в url-е
+        position = 1  # Позиция начала символов
+        count = int(ord(query[position - 1]))  # Количество символов в url-е
         while count != 0:
             url += query[position: position + count]
             url += '.'
@@ -96,12 +118,43 @@ class DNS:
         return url, position
 
     @staticmethod
-    def get_offset(counter):
+    def _get_offset(counter):
         if (counter & (0x03 << 14)) >> 14 == 0b11:  # 2 старших бита равны '0b11'
             return counter & ~(0x03 << 14)
         else:
             print('COUNTEER!: ' + str(hex(counter)))
             return -1
+
+    @staticmethod
+    def _parse_info(message, position, data_length=None):
+        pos = position
+        info = str()
+
+        if data_length is None:
+            data_length = 1000
+
+        while pos != position + data_length:
+            # Если это указатель
+            if ((ord(message[pos]) & 0b11000000) >> 6) == 0b11:
+                counter = unpack('!H', message[pos: pos + 2])[0]
+                pos += 2
+                offset = DNS._get_offset(counter)
+                name, ignore = DNS._parse_name(message[offset:])
+                info += name
+
+            # Иначе символьная запись
+            else:
+                counter = ord(message[pos])
+                pos += 1
+                if counter == 0:
+                    break
+                info += message[pos: pos + counter]
+                pos += counter
+                info += '.'
+
+        if info.endswith('.'):
+            info = info[:-1]
+        return info
 
     class Header:
 
@@ -114,12 +167,12 @@ class DNS:
             self.additional_record_count = None
 
         def __str__(self):
-            return 'Id: ' + str(self.id) +\
-                    ' Flags_and_codes: ' + str(bin(self.flags_and_codes)) +\
-                    ' Question_count: ' + str(self.question_count) +\
-                    ' Answer_record_count: ' + str(self.answer_record_count) +\
-                    ' Authority_record_count: ' + str(self.authority_record_count) +\
-                    ' Additional_record_count: ' + str(self.additional_record_count)
+            return 'Id: ' + str(self.id) + \
+                   ' Flags_and_codes: ' + str(bin(self.flags_and_codes)) + \
+                   ' Question_count: ' + str(self.question_count) + \
+                   ' Answer_record_count: ' + str(self.answer_record_count) + \
+                   ' Authority_record_count: ' + str(self.authority_record_count) + \
+                   ' Additional_record_count: ' + str(self.additional_record_count)
 
         @staticmethod
         def parse(message):
@@ -141,20 +194,20 @@ class DNS:
             self.clazz = None
 
         def __str__(self):
-            return 'Name: ' + str(self.name) +\
-                    ' Type: ' + str(self.type) +\
-                    ' Class: ' + str(self.clazz)
+            return 'Name: ' + str(self.name) + \
+                   ' Type: ' + str(self.type) + \
+                   ' Class: ' + str(self.clazz)
 
         @staticmethod
         def parse(message, position):
             query = DNS.Query()
-            query.name, pos = DNS.parse_url(message[position:])
+            query.name, pos = DNS._parse_name(message[position:])
             position += pos
             query.type, query.clazz = unpack('!HH', message[position: position + 4])
             position += 4
             return query, position
 
-    class Answer:
+    class ResourceRecord:
 
         def __init__(self):
             self.name = None
@@ -162,85 +215,122 @@ class DNS:
             self.clazz = None
             self.TTL = None
             self.data_length = None
-            self.resource_data = None       # Сделаю строкой
+            self.resource_data = None  # Сделаю строкой
 
         def __str__(self):
-            return 'Name: ' + str(self.name) +\
-                    ' Type: ' + str(self.type) +\
-                    ' Class: ' + str(self.clazz) +\
-                    ' TTL: ' + str(self.TTL) +\
-                    ' Data_length: ' + str(self.data_length) +\
-                    ' Resouce_data: (' + str(self.resource_data) + ')'
+            return 'Name: ' + str(self.name) + \
+                   ' Type: ' + str(self.type) + \
+                   ' Class: ' + str(self.clazz) + \
+                   ' TTL: ' + str(self.TTL) + \
+                   ' Data_length: ' + str(self.data_length) + \
+                   ' Resouce_data: (' + str(self.resource_data) + ')'
 
         @staticmethod
         def parse(message, position):
-            answer = DNS.Answer()
+            resource_record = DNS.ResourceRecord()
 
-            name_offset = DNS.get_offset(unpack('!H', message[position: position + 2])[0])
+            # Имя ресурсной записи - указатель в секцию запросов
+            name_offset = DNS._get_offset(unpack('!H', message[position: position + 2])[0])
             position += 2
-            answer.name, ignore_pos = DNS.parse_url(message[name_offset:])
+            # TODO experiment
+            # resource_record.name = DNS._parse_info(message, position)
+            resource_record.name = DNS._parse_name(message[name_offset:])[0]
 
-            answer.type, answer.clazz, answer.TTL,\
-            answer.data_length = unpack('!HHIH', message[position: position + 10])
+            resource_record.type, resource_record.clazz, resource_record.TTL, \
+                resource_record.data_length = unpack('!HHIH', message[position: position + 10])
             position += 10
-            answer.resource_data = \
-                DNS.Answer.__parse_resource_data(
-                    message[position: position + answer.data_length], answer.type
+            resource_record.resource_data = \
+                DNS.ResourceRecord.__parse_resource_data(
+                    message, position, resource_record.type, resource_record.data_length
                 )
-            position += answer.data_length
-            return answer, position
+
+            position += resource_record.data_length
+            return resource_record, position
 
         @staticmethod
-        def __parse_resource_data(data, answer_type):
+        def __parse_resource_data(message, position, answer_type, data_length):
             func = {
-                DNS._type.A: DNS.Answer.__parse_type_a,
-                DNS._type.TXT: DNS.Answer.__parse_type_txt,
-                DNS._type.AAAA: DNS.Answer.__parse_type_aaaa,
-            }.get(answer_type, DNS.Answer.__parse_unknown_type)
+                DNS._Type.A: DNS.ResourceRecord.__parse_type_a,
+                DNS._Type.TXT: DNS.ResourceRecord.__parse_type_txt,
+                DNS._Type.AAAA: DNS.ResourceRecord.__parse_type_aaaa,
+                DNS._Type.MX: DNS.ResourceRecord.__parse_type_mx,
+                DNS._Type.NS: DNS.ResourceRecord.__parse_type_ns,
+                DNS._Type.CNAME: DNS.ResourceRecord.__parse_type_cname,
+                DNS._Type.PTR: DNS.ResourceRecord.__parse_type_ptr,
 
-            if not (func == DNS.Answer.__parse_unknown_type):
-                resource_data = func(data)
+            }.get(answer_type, DNS.ResourceRecord.__parse_unknown_type)
+
+            if not (func == DNS.ResourceRecord.__parse_unknown_type):
+                resource_data = func(message, position, data_length)
             else:
                 resource_data = func(answer_type)
             return resource_data
 
         @staticmethod
-        def __parse_type_a(data):
-            return 'IPv4-address: ' + str(socket.inet_ntoa(data))
+        def __parse_type_a(message, position, data_length):
+            return 'IPv4-address: ' + str(socket.inet_ntoa(message[position: position + data_length]))
 
         @staticmethod
-        def __parse_type_ns(data):
-            return 'Name Server: ' + 'TODO'  # TODO
+        def __parse_type_aaaa(message, position, data_length):
+            address = 'IPv6 Address: '
+            data = message[position: position + data_length]
+            for i, j in zip(data[0::2], data[1::2]):
+                address += format(ord(i), 'x').zfill(2) + format(ord(j), 'x').zfill(2)
+                address += ':'
+            if address.endswith(':'):
+                address = address[:-1]
+            return address
 
         @staticmethod
-        def __parse_type_aaaa(data):
-            return 'IPv6 Address: TODO' # TODO
+        def __parse_type_mx(message, position, data_length):
+            info = 'Preference: ' + str(unpack('!H', message[position: position + 2])[0])
+            info += '; Mail Exchange: '
+            info += DNS._parse_info(message, position + 2, data_length - 2)
+            return info
 
         @staticmethod
-        def __parse_type_txt(data):
-            # Первое число - длина
-            return 'TXT: ' + str(data[1:])
+        def __parse_type_ns(message, position, data_length):
+            info = 'Name Server: '
+            info += DNS._parse_info(message, position, data_length)
+            return info
+
+        @staticmethod
+        def __parse_type_txt(message, position, data_length):
+            # Первый байт - длина текстового сообщения
+            return 'TXT: ' + str(message[position + 1: position + data_length])
+
+        @staticmethod
+        def __parse_type_cname(message, position, data_length):
+            info = 'Primary Name: '
+            info += DNS._parse_info(message, position, data_length)
+            return info
+
+        @staticmethod
+        def __parse_type_ptr(message, position, data_length):
+            info = 'Domain Name: '
+            info += DNS._parse_info(message, position, data_length)
+            return info
 
         @staticmethod
         def __parse_unknown_type(answer_type):
             return 'UNKNOWN TYPE: ' + str(answer_type)
 
-    class _type:
+    class _Type:
         """
         Класс констант для типов запроса/ресурсных записей
         """
-        A = 0x01                # 1) IPv4-адрес
-        NS = 0x02               # 2) Сервер DNS
-        CNAME = 0x05            # 5) Каноническое имя
-        PTR = 0x0C              # 12) Запись указателя
-        HINFO = 0x0d            # 13) Информация о хосте
-        MX = 0x0f               # 15) Запись об обмене почтой
-        TXT = 0x10              # 16) Запись произвольных двоичных данных
-        AAAA = 0x1C             # 28) IPv6-адрес
-        AXFR = 0xfc             # 252) Запрос на передачу зоны
-        ANY = 0xff              # 255) Запрос всех записей
+        A = 0x01        # 1) IPv4-адрес
+        NS = 0x02       # 2) Сервер DNS
+        CNAME = 0x05    # 5) Каноническое имя
+        PTR = 0x0C      # 12) Запись указателя
+        HINFO = 0x0d    # 13) Информация о хосте
+        MX = 0x0f       # 15) Запись об обмене почтой
+        TXT = 0x10      # 16) Запись произвольных двоичных данных
+        AAAA = 0x1C     # 28) IPv6-адрес
+        AXFR = 0xfc     # 252) Запрос на передачу зоны
+        ANY = 0xff      # 255) Запрос всех записей
 
-        UNKNOWN = -1            # Неизвестный тип
+        UNKNOWN = -1  # Неизвестный тип
 
         def __init__(self):
             raise Exception("This is a private constructor")
