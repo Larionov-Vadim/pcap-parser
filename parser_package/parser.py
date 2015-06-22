@@ -4,7 +4,7 @@ from layers.network_layer import IPProtocol
 from layers.transport_layer import TCPProtocol, UDPProtocol
 from layers.application.pop3 import POP3
 from layers.application.dns import DNS
-from result_set import ResultSet
+from parser_package.result_set import ResultSet
 
 __author__ = 'vadim'
 
@@ -40,10 +40,12 @@ class PcapParser:
                 tcp_segment = TCPProtocol.parse(ip_packet.data)
                 ip_packet.data = tcp_segment
 
-                if not tcp_segment.data:      # Расносильно len(tcp_segment.data) != 0
+                if tcp_segment.data:                # Расносильно len(tcp_segment.data) != 0
                     if POP3.PORT in (tcp_segment.src_port, tcp_segment.dst_port):
-                        data = POP3.parse(tcp_segment.data)
-                        file_extension = '.eml'  # Расширение сообщений электронной почты
+                        pop3_message = POP3.parse(tcp_segment.data)
+                        if pop3_message is not None:
+                            data = pop3_message.get_data()
+                            file_extension = pop3_message.get_file_extension()
 
                     # TODO SMTP-protocol
                     # TODO HTTP-protocol

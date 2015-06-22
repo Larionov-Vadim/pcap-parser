@@ -10,7 +10,14 @@ class POP3:
     __pop3_buf = list()         # Буфер для сборки сообщений протокола POP3
 
     def __init__(self):
-        pass
+        self.data = None
+
+    @staticmethod
+    def get_file_extension():
+        return '.eml'
+
+    def get_data(self):
+        return self.data
 
     @staticmethod
     def parse(message):
@@ -29,13 +36,14 @@ class POP3:
                 message = message.split('\n', 1)[1]
 
             if message.endswith('.\r\n'):  # Последняя часть письма (либо цельное письмо)
-                msg = str()
+                pop3_message = POP3()
+                pop3_message.data = str()
                 for part_msg in POP3.__pop3_buf:
-                    msg += part_msg
-                msg += message
+                    pop3_message.data += part_msg
+                pop3_message.data += message
                 del POP3.__pop3_buf[:]  # Очистка буфера
                 POP3.__is_pop3_msg = False
-                return msg
+                return pop3_message
 
             else:
                 POP3.__pop3_buf.append(message)  # Части письма хранятся в буфере
