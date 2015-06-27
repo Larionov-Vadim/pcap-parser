@@ -24,8 +24,10 @@ def main(args):
         if result_set is not None:
             dir_path = create_path_name(args.base_dir, result_set.src_ip, result_set.dst_ip)
             create_dir(dir_path)
-
-            file_name = result_set.generate_file_name()
+            if (result_set.file_name):#FTP   потомучто нужно сохранить имя файла
+                file_name=result_set.file_name
+            else:#не FTP
+                file_name = result_set.generate_file_name()
             with open(create_path_name(dir_path, file_name), mode='w') as f:
                 f.write(result_set.data)
 

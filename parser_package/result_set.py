@@ -4,11 +4,12 @@ from hashlib import md5
 __author__ = 'vadim'
 
 class ResultSet:
-    def __init__(self, src_ip, dst_ip, data, file_extension):
+    def __init__(self, src_ip, dst_ip, data, file_extension,file_name):
         self.src_ip = src_ip
         self.dst_ip = dst_ip
         self.data = data
         self.file_extension = file_extension
+        self.file_name = file_name
 
     def generate_file_name(self, index=None):
         """

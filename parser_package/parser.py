@@ -5,6 +5,7 @@ from layers.network_layer import IPProtocol
 from layers.transport_layer import TCPProtocol, UDPProtocol
 from layers.application.pop3 import POP3
 from layers.application.dns import DNS
+from layers.application.ftp import FTP
 from parser_package.result_set import ResultSet
 
 __author__ = 'vadim'
@@ -14,6 +15,10 @@ class PcapParser:
     """
     Парсер сетевого трафика
     """
+
+    file_downloading = False
+    FTP_PASSIVE_PORT = None
+
     def __init__(self):
         pass
 
@@ -24,7 +29,7 @@ class PcapParser:
             * Канальный уровень: Ethernet II
             * Сетевой уровень: IPv4
             * Транспортный уровень: TCP, UDP
-            * Прикладной уровень: POP3
+            * Прикладной уровень: POP3, FTP, HTTP, SMTP
         :param frame: кадр канального уровня в виде байт
         :return: экземпляр класса ResultSet либо None, если обработка данных не завершена
         """
@@ -36,6 +41,7 @@ class PcapParser:
             # Предварительная инициализация
             data = None             # Данные от прикладного уровня
             file_extension = None   # Расширение файла с данными от прикладного уровня
+            file_name = None        #Имя файла в случае его наличия
 
             if ip_packet.protocol == IPProtocol.TCP:  # TCP-сегмент
                 tcp_segment = TCPProtocol.parse(ip_packet.data)
@@ -52,10 +58,20 @@ class PcapParser:
                         data = SMTP.parse(tcp_segment.data)
                         file_extension = '.eml'
 
+                    if (FTP.PORT == tcp_segment.src_port):
+                        data=FTP.parse(tcp_segment)
+                        if(data):#здесь нам вернулся файл
+                            file_name = FTP.get_file_name()
+                            file_extension = None
+                            self.FTP_PASSIVE_PORT = None
 
-                    # TODO SMTP-protocol
+
+                    if (FTP.PAS_PORT==tcp_segment.src_port):
+                        FTP.add_to_file(tcp_segment.data)
+
+
                     # TODO HTTP-protocol
-                    # TODO FTP-protocol
+
 
             elif ip_packet.protocol == IPProtocol.UDP:
                 udp_datagram = UDPProtocol.parse(ip_packet.data)
@@ -69,7 +85,10 @@ class PcapParser:
 
             # Подготовка ResultSet для ответа/возврата
             if (data is not None) and (file_extension is not None):
-                result_set = ResultSet(ip_packet.src_ip, ip_packet.dst_ip, data, file_extension)
+                result_set = ResultSet(ip_packet.src_ip, ip_packet.dst_ip, data, file_extension, file_name)
+                return result_set
+            elif(data is not None):#FTP!!!
+                result_set = ResultSet(ip_packet.src_ip, ip_packet.dst_ip, data, file_extension, file_name.replace("/","\\"))#экранируем слеши
                 return result_set
             else:
                 return None
