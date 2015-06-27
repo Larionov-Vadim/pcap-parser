@@ -58,6 +58,7 @@ class PcapParser:
                         data = SMTP.parse(tcp_segment.data)
                         file_extension = '.eml'
 
+                    #обрабатываем ответы FTP Сервера
                     if (FTP.PORT == tcp_segment.src_port):
                         data=FTP.parse(tcp_segment)
                         if(data):#здесь нам вернулся файл
@@ -65,7 +66,7 @@ class PcapParser:
                             file_extension = None
                             self.FTP_PASSIVE_PORT = None
 
-
+                    #передача файла ведется по рандомно выделенному сервером порту
                     if (FTP.PAS_PORT==tcp_segment.src_port):
                         FTP.add_to_file(tcp_segment.data)
 
