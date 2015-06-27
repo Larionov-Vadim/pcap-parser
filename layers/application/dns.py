@@ -100,30 +100,6 @@ class DNS:
             return dns_message
         return None
 
-    # Формируем url (name) DNS-запроса
-    @staticmethod
-    def _parse_name(query):
-        url = str()
-        position = 1  # Позиция начала символов
-        count = int(ord(query[position - 1]))  # Количество символов в url-е
-        while count != 0:
-            url += query[position: position + count]
-            url += '.'
-            position += count + 1
-            count = int(ord(query[position - 1]))
-
-        if url.endswith('.'):
-            url = url[:-1]
-
-        return url, position
-
-    @staticmethod
-    def _get_offset(counter):
-        if (counter & (0x03 << 14)) >> 14 == 0b11:  # 2 старших бита равны '0b11'
-            return counter & ~(0x03 << 14)
-        else:
-            return -1
-
     @staticmethod
     def _parse_info(message, position, data_length=None):
         pos = position
@@ -135,15 +111,11 @@ class DNS:
         while pos != position + data_length:
             # Если это указатель
             if ((ord(message[pos]) & 0b11000000) >> 6) == 0b11:
-                # TODO имена
                 counter = unpack('!H', message[pos: pos + 2])[0]
                 pos += 2
                 offset = counter & ~(0x03 << 14)
-
-                # Считываем часть
-                count = ord(message[offset])
-                info += message[offset + 1: offset + 1 + count]
-                info += '.'
+                info += DNS._parse_info(message, offset, None)[0] + '.'
+                break                   # За указателем не может быть символьных записей
 
             # Иначе символьная запись
             else:
@@ -151,9 +123,8 @@ class DNS:
                 if counter == 0:
                     break
                 pos += 1
-                info += message[pos: pos + counter]
+                info += message[pos: pos + counter] + '.'
                 pos += counter
-                info += '.'
 
         if info.endswith('.'):
             info = info[:-1]
@@ -204,8 +175,8 @@ class DNS:
         @staticmethod
         def parse(message, position):
             query = DNS.Query()
-            query.name, pos = DNS._parse_name(message[position:])
-            position += pos
+            query.name, position = DNS._parse_info(message, position)
+            position += 1   # Подгон
             query.type, query.clazz = unpack('!HH', message[position: position + 4])
             position += 4
             return query, position
