@@ -1,4 +1,5 @@
 # coding: utf-8
+from layers.application.smtp import SMTP
 from layers.data_link_layer import EthernetII
 from layers.network_layer import IPProtocol
 from layers.transport_layer import TCPProtocol, UDPProtocol
@@ -44,6 +45,11 @@ class PcapParser:
                     if POP3.PORT in (tcp_segment.src_port, tcp_segment.dst_port):
                         data = POP3.parse(tcp_segment.data)
                         file_extension = '.eml'  # Расширение сообщений электронной почты
+
+                    if SMTP.PORT in (tcp_segment.src_port, tcp_segment.dst_port):
+                        data = SMTP.parse(tcp_segment.data)
+                        file_extension = '.eml'
+
 
                     # TODO SMTP-protocol
                     # TODO HTTP-protocol
