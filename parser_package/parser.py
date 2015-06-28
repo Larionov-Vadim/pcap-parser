@@ -1,11 +1,12 @@
 # coding: utf-8
-from layers.application.smtp import SMTP
 from layers.data_link_layer import EthernetII
 from layers.network_layer import IPProtocol
 from layers.transport_layer import TCPProtocol, UDPProtocol
 from layers.application.pop3 import POP3
 from layers.application.dns import DNS
 from layers.application.ftp import FTP
+from layers.application.http import HTTP
+from layers.application.smtp import SMTP
 from parser_package.result_set import ResultSet
 
 __author__ = 'vadim'
@@ -58,6 +59,11 @@ class PcapParser:
                         data = SMTP.parse(tcp_segment.data)
                         file_extension = '.eml'
 
+                    if HTTP.PORT in (tcp_segment.src_port, tcp_segment.dst_port):
+                        HTTP.parse(tcp_segment.data)
+                        data = HTTP.get_data()
+                        file_extension = HTTP.get_file_extension()
+
                     #обрабатываем ответы FTP Сервера
                     if (FTP.PORT == tcp_segment.src_port):
                         data=FTP.parse(tcp_segment)
@@ -70,10 +76,6 @@ class PcapParser:
                     if (FTP.PAS_PORT==tcp_segment.src_port):
                         FTP.add_to_file(tcp_segment.data)
 
-
-                    # TODO HTTP-protocol
-
-
             elif ip_packet.protocol == IPProtocol.UDP:
                 udp_datagram = UDPProtocol.parse(ip_packet.data)
 
@@ -83,6 +85,7 @@ class PcapParser:
                     if dns_message is not None:
                         data = dns_message.get_data()
                         file_extension = dns_message.get_file_extension()
+
 
             # Подготовка ResultSet для ответа/возврата
             if (data is not None) and (file_extension is not None):

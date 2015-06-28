@@ -20,7 +20,6 @@ def main(args):
     (header_cap, frame) = cap.next()
     while len(frame) != 0:
         result_set = pcapParser.parse(frame)
-
         if result_set is not None:
             dir_path = create_path_name(args.base_dir, result_set.src_ip, result_set.dst_ip)
             create_dir(dir_path)
