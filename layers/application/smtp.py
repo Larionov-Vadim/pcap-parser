@@ -27,7 +27,7 @@ class SMTP:
             if message[:3].upper().startswith('354'):  # Удаление первой строки 'enter message' от сервера
                 message = message.split('\n', 1)[1]
 
-            if ('\r\n.\r\n' in message) & (len(message) <= 6):  # Последняя часть письма (либо цельное письмо)
+            if ( ('\r\n.\r\n' in message) & (len(message) <= 6) ) | ( message.endswith('.\r\n') ) :  # Последняя часть письма (либо цельное письмо)
                 print len(message)
                 msg = str()
                 for part_msg in SMTP.__smtp_buf:
