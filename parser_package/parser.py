@@ -24,6 +24,7 @@ class PcapParser:
         pass
 
     def parse(self, frame):
+        ftp = False
         """
         Производит разбор (парсит) кадра канального уровня на известные протоколы.
         Известные протоколы:
@@ -72,6 +73,9 @@ class PcapParser:
                             data = con.data
                             file_extension = None
                             self.FTP_PASSIVE_PORT = None
+                            ftp = True
+                        else:
+                            ftp = False
 
 
                     #передача файла ведется по рандомно выделенному сервером порту
@@ -97,7 +101,7 @@ class PcapParser:
             if (data is not None) and (file_extension is not None):
                 result_set = ResultSet(ip_packet.src_ip, ip_packet.dst_ip, data, file_extension, file_name)
                 return result_set
-            elif(data is not None):#FTP!!!
+            elif(data is not None) and (file_extension is None) and (ftp):#FTP!!!
                 result_set = ResultSet(ip_packet.src_ip, ip_packet.dst_ip, data, file_extension, file_name.replace("/","\\"))#экранируем слеши
                 return result_set
             else:
