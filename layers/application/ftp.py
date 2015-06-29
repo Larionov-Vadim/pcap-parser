@@ -2,23 +2,23 @@
 
 __author__ = 'mid'
 
+class ftp_con:
+    PORT = None
+    IP = None
+    FILE_NAME = None
+    data = ""
+    i = 0
 
 class FTP:
     PORT = 21
     i = 1
-    PAS_PORT = None#порт на сервере для пассивного режима когда мы подключаемся к нему.
-    SERVER_ADDRESS = None#IP  адрес сервера
-    FILE_NAME = None
-    data = ""
+    ftp_con = []
 
     def __init__(self):
-        self.data = ""
-
-    def get_data(self):
-        return self.data
+        self
 
     @staticmethod
-    def parse(message):
+    def parse(message,ip):
         """
         Парсер сообщений протокола FTP
         сначала команда PASV(227) - возвращает ответом адрес и порт подключения к FTP серверу
@@ -26,30 +26,42 @@ class FTP:
         а FTP сервер отвечает нам пакетами с кусками файла, которые мы склеиваем
         После этого сервер посывает сообщение о конце файла(226)
         """
-        message
+
         if (message.data[0:3]=="227"):#ответ на PASSV
-            #беерм ip И порт из ответа
-            data = (message.data[message.data.find("(")+1:len(message.data)-4]).split(',')#берем данные из ответа и загоняем их в лист
-            FTP.PAS_PORT = int(data[4])*256+int(data[5])
-            FTP.SERVER_ADDRESS = data[0]+"."+data[1]+"."+data[2]+"."+data[3]
+            #беерм ip И порт из ответ)
+            data = (message.data[message.data.find("(")+1:message.data.find(")")]).split(',')#берем данные из ответа и загоняем их в лист
+            #подразумевается, что по команде 226 соединение сбрасывается
+            new_con = ftp_con()
+            new_con.PORT = int(data[4])*256+int(data[5])
+            new_con.IP = data[0]+"."+data[1]+"."+data[2]+"."+data[3]#пассивный порт, который открываем МЫ
+            FTP.ftp_con.append(new_con)
             return None
-        elif (message.data[0:3]=="150"):#ответ на RETR
-            #берем имя файла
-            if (message.data[message.data.find("/"):message.data.find("(")-1] != ""):
-                FTP.FILE_NAME=message.data[message.data.find("/"):message.data.find("(")-1]
-                FTP.data=""
-                return None
-        elif (message.data[0:3]=="226" and FTP.FILE_NAME):#конец передачи файла
-            PAS_PORT = None
-            return FTP.data
+        elif (message.data[0:3]=="150" and message.data.find('/')>0):#ответ на RETR
+            #берем имя файла, для этого мы смотрим в соединениях совпадающее по IP адресу и без имени файла
+            for con in FTP.ftp_con:
+                if (con.IP == ip):
+                    con.FILE_NAME = message.data[message.data.find('/'):message.data.find('(')-1]
+                    return None
+
+        elif (message.data[0:3]=="226"):#конец передачи файла
+            i = 0
+            for con in FTP.ftp_con:
+                if (con.IP==ip):
+                    if (con.FILE_NAME):
+                        return FTP.ftp_con.pop(i)#для файлов
+                    else:
+                        FTP.ftp_con.pop(i)#для не файлов
+                        return None
+                i += 1
 
     @staticmethod
-    def add_to_file(message):
-        if (FTP.FILE_NAME):
-            FTP.data+=message
+    def add_to_file(message,ip):
+        #по порту и ип определяем куда вставлять
+        for con in FTP.ftp_con:
+            if (con.PORT == message.src_port and con.IP == ip and con.FILE_NAME):
+                con.data +=message.data
 
-    @staticmethod
-    def get_file_name():
-        return FTP.FILE_NAME
+
+
 
 

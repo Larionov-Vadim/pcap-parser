@@ -60,15 +60,21 @@ class PcapParser:
 
                     #обрабатываем ответы FTP Сервера
                     if (FTP.PORT == tcp_segment.src_port):
-                        data=FTP.parse(tcp_segment)
-                        if(data):#здесь нам вернулся файл
-                            file_name = FTP.get_file_name()
+                        con=FTP.parse(tcp_segment,ip_packet.src_ip)#объект FTP_CON
+                        if(con):#здесь нам вернулся файл
+                            file_name = con.FILE_NAME
+                            data = con.data
                             file_extension = None
                             self.FTP_PASSIVE_PORT = None
 
+
                     #передача файла ведется по рандомно выделенному сервером порту
-                    if (FTP.PAS_PORT==tcp_segment.src_port):
-                        FTP.add_to_file(tcp_segment.data)
+                    ftp_ports = []
+                    if len(FTP.ftp_con)>0:
+                        for con in FTP.ftp_con:
+                            ftp_ports.append(con.PORT)
+                    if (tcp_segment.src_port in ftp_ports):
+                        FTP.add_to_file(tcp_segment,ip_packet.src_ip)
 
 
                     # TODO HTTP-protocol
