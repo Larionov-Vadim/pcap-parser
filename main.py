@@ -20,7 +20,6 @@ def main(args):
     (header_cap, frame) = cap.next()
     while len(frame) != 0:
         result_set = pcapParser.parse(frame)
-
         if result_set is not None:
             dir_path = create_path_name(args.base_dir, result_set.src_ip, result_set.dst_ip)
             create_dir(dir_path)
@@ -35,6 +34,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+    print '\r\n.\r\n'
     arg_parser = ArgumentParser(description='*.pcap files parser')
     arg_parser.add_argument('path_file', type=str, help='The path to the .pcap file')
     arg_parser.add_argument('-d', '--dir', '--destination',
