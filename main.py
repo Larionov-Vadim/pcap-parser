@@ -34,6 +34,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+    print '\r\n.\r\n'
     arg_parser = ArgumentParser(description='*.pcap files parser')
     arg_parser.add_argument('path_file', type=str, help='The path to the .pcap file')
     arg_parser.add_argument('-d', '--dir', '--destination',
